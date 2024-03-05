@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "constants.h"
 #include "hsk.h"
 #include "pool.h"
 #include "ns.h"
@@ -36,6 +37,9 @@ typedef struct hsk_options_s {
   uint8_t *identity_key;
   char *seeds;
   int pool_size;
+  char *user_agent;
+  bool checkpoint;
+  char *prefix;
 } hsk_options_t;
 
 static void
@@ -52,6 +56,42 @@ hsk_options_init(hsk_options_t *opt) {
   opt->identity_key = NULL;
   opt->seeds = NULL;
   opt->pool_size = HSK_POOL_SIZE;
+  opt->user_agent = NULL;
+  opt->checkpoint = false;
+  opt->prefix = NULL;
+}
+
+static void
+hsk_options_uninit(hsk_options_t *opt) {
+  if (opt->config) {
+    free(opt->config);
+    opt->config = NULL;
+  }
+
+  if (opt->rs_config) {
+    free(opt->rs_config);
+    opt->rs_config = NULL;
+  }
+
+  if (opt->identity_key) {
+    free(opt->identity_key);
+    opt->identity_key = NULL;
+  }
+
+  if (opt->seeds) {
+    free(opt->seeds);
+    opt->seeds = NULL;
+  }
+
+  if (opt->user_agent) {
+    free(opt->user_agent);
+    opt->user_agent = NULL;
+  }
+
+  if (opt->prefix) {
+    free(opt->prefix);
+    opt->prefix = NULL;
+  }
 }
 
 static void
@@ -107,7 +147,7 @@ static void
 help(int r) {
   fprintf(stderr,
     "\n"
-    "hnsd 1.0.0\n"
+    PACKAGE_NAME" "PACKAGE_VERSION" ("HSK_NETWORK_NAME")\n"
     "  Copyright (c) 2018, Christopher Jeffrey <chjj@handshake.org>\n"
     "\n"
     "Usage: hnsd [options]\n"
@@ -141,6 +181,18 @@ help(int r) {
     "  -l, --log-file <filename>\n"
     "    Redirect output to a log file.\n"
     "\n"
+    "  -a, --user-agent <string>\n"
+    "    Add supplemental user agent string in p2p version message.\n"
+    "\n"
+    "  -v, --version\n"
+    "    Print version and network build information and exit.\n"
+    "\n"
+    "  -t, --checkpoint\n"
+    "    Start chain sync from checkpoint.\n"
+    "\n"
+    "  -x, --prefix <directory name>\n"
+    "    Write/read state to/from disk in given directory.\n"
+    "\n"
 #ifndef _WIN32
     "  -d, --daemon\n"
     "    Fork and background the process.\n"
@@ -156,13 +208,15 @@ help(int r) {
 
 static void
 parse_arg(int argc, char **argv, hsk_options_t *opt) {
-  const static char *optstring = "c:n:r:i:u:p:k:s:l:h"
+  const static char *optstring = "hvtc:n:r:i:u:p:k:s:l:h:a:x:"
+
 #ifndef _WIN32
     "d"
 #endif
     ;
 
   const static struct option longopts[] = {
+    { "version", no_argument, NULL, 'v' },
     { "config", required_argument, NULL, 'c' },
     { "ns-host", required_argument, NULL, 'n' },
     { "rs-host", required_argument, NULL, 'r' },
@@ -172,6 +226,9 @@ parse_arg(int argc, char **argv, hsk_options_t *opt) {
     { "identity-key", required_argument, NULL, 'k' },
     { "seeds", required_argument, NULL, 's' },
     { "log-file", required_argument, NULL, 'l' },
+    { "user-agent", required_argument, NULL, 'a' },
+    { "checkpoint", no_argument, NULL, 't' },
+    { "prefix", required_argument, NULL, 'x' },
 #ifndef _WIN32
     { "daemon", no_argument, NULL, 'd' },
 #endif
@@ -194,6 +251,11 @@ parse_arg(int argc, char **argv, hsk_options_t *opt) {
       break;
 
     switch (o) {
+      case 'v': {
+        printf("%s (%s)\n", PACKAGE_VERSION, HSK_NETWORK_NAME);
+        exit(0);
+      }
+
       case 'h': {
         return help(0);
       }
@@ -307,6 +369,37 @@ parse_arg(int argc, char **argv, hsk_options_t *opt) {
         break;
       }
 
+      case 'a': {
+        if (!optarg || strlen(optarg) == 0)
+          return help(1);
+
+        if (opt->user_agent)
+          free(opt->user_agent);
+
+        opt->user_agent = strdup(optarg);
+
+        break;
+      }
+
+      case 'x': {
+        if (!optarg || strlen(optarg) == 0)
+          return help(1);
+
+        if (opt->prefix)
+          free(opt->prefix);
+
+        opt->prefix = strdup(optarg);
+
+        break;
+      }
+
+      case 't': {
+
+        opt->checkpoint = true;
+
+        break;
+      }
+
 #ifndef _WIN32
       case 'd': {
         background = true;
@@ -381,6 +474,8 @@ static void
 hsk_daemon_after_close(void *data);
 static void
 hsk_daemon_signal_shutdown(void *data);
+static void
+hsk_daemon_uninit(hsk_daemon_t *data);
 
 int
 hsk_daemon_init(hsk_daemon_t *daemon, uv_loop_t *loop, hsk_options_t *opt) {
@@ -424,6 +519,12 @@ hsk_daemon_init(hsk_daemon_t *daemon, uv_loop_t *loop, hsk_options_t *opt) {
 
   if (!hsk_pool_set_seeds(daemon->pool, opt->seeds)) {
     fprintf(stderr, "failed adding seeds\n");
+    rc = HSK_EFAILURE;
+    goto fail;
+  }
+
+  if (!hsk_pool_set_agent(daemon->pool, opt->user_agent)) {
+    fprintf(stderr, "failed adding user agent\n");
     rc = HSK_EFAILURE;
     goto fail;
   }
@@ -477,13 +578,79 @@ hsk_daemon_init(hsk_daemon_t *daemon, uv_loop_t *loop, hsk_options_t *opt) {
   return HSK_SUCCESS;
 
 fail:
-  hsk_daemon_after_close((void *)daemon);
+  hsk_daemon_uninit(daemon);
   return rc;
+}
+
+void
+hsk_daemon_uninit(hsk_daemon_t *daemon) {
+  if (!daemon)
+    return;
+
+  if (daemon->signals) {
+    hsk_signals_free(daemon->signals);
+    daemon->signals = NULL;
+  }
+
+  if (daemon->rs) {
+    hsk_rs_free(daemon->rs);
+    daemon->rs = NULL;
+  }
+
+  if (daemon->pool) {
+    hsk_pool_free(daemon->pool);
+    daemon->pool = NULL;
+  }
+
+  if (daemon->ns) {
+    hsk_ns_free(daemon->ns);
+    daemon->ns = NULL;
+  }
 }
 
 int
 hsk_daemon_open(hsk_daemon_t *daemon, hsk_options_t *opt) {
   int rc = HSK_SUCCESS;
+
+  if (opt->checkpoint && HSK_CHECKPOINT != NULL) {
+    // Read the hard-coded checkpoint
+    uint8_t *data = (uint8_t *)HSK_CHECKPOINT;
+    size_t data_len = HSK_STORE_CHECKPOINT_SIZE;
+    if (!hsk_store_inject_checkpoint(&data, &data_len, &daemon->pool->chain)) {
+      fprintf(stderr, "unable to inject hard-coded checkpoint\n");
+      return HSK_EBADARGS;
+    }
+  }
+
+  if (opt->prefix) {
+    if (!hsk_store_exists(opt->prefix)) {
+      fprintf(stderr, "prefix path does not exist\n");
+      return HSK_EBADARGS;
+    }
+
+    // Prefix must have enough room for filename
+    if (strlen(opt->prefix) + HSK_STORE_PATH_RESERVED >= HSK_STORE_PATH_MAX) {
+      fprintf(stderr, "prefix path is too long\n");
+      return HSK_EBADARGS;
+    }
+
+    daemon->pool->chain.prefix = opt->prefix;
+
+    // Read the checkpoint from file
+    uint8_t data[HSK_STORE_CHECKPOINT_SIZE];
+    uint8_t *data_ptr = (uint8_t *)&data;
+    size_t data_len = HSK_STORE_CHECKPOINT_SIZE;
+    if (hsk_store_read(&data_ptr, &data_len, &daemon->pool->chain)) {
+      if (!hsk_store_inject_checkpoint(
+        &data_ptr,
+        &data_len,
+        &daemon->pool->chain
+      )) {
+        fprintf(stderr, "unable to inject checkpoint from file\n");
+        return HSK_EBADARGS;
+      }
+    }
+  }
 
   rc = hsk_pool_open(daemon->pool);
 
@@ -540,25 +707,21 @@ static void
 hsk_daemon_after_close(void *data) {
   hsk_daemon_t *daemon = (hsk_daemon_t *)data;
 
-  if (daemon->rs) {
-    hsk_rs_free(daemon->rs);
-    daemon->rs = NULL;
-  }
-
   if (daemon->ns) {
-    hsk_ns_destroy(daemon->ns);
-    daemon->ns = NULL;
+    int rc = hsk_ns_close(daemon->ns);
+
+    if (rc != HSK_SUCCESS)
+      fprintf(stderr, "failed to close ns: %s\n", hsk_strerror(rc));
   }
 
   if (daemon->pool) {
-    hsk_pool_destroy(daemon->pool);
-    daemon->pool = NULL;
+    int rc = hsk_pool_close(daemon->pool);
+
+    if (rc != HSK_SUCCESS)
+      fprintf(stderr, "failed to close pool: %s\n", hsk_strerror(rc));
   }
 
-  if (daemon->signals) {
-    hsk_signals_free(daemon->signals);
-    daemon->signals = NULL;
-  }
+  hsk_daemon_uninit(daemon);
 }
 
 static void
@@ -636,6 +799,8 @@ done:
 
     uv_loop_close(loop);
   }
+
+  hsk_options_uninit(&opt);
 
   return rc;
 }

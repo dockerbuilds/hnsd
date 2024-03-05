@@ -1,7 +1,9 @@
 #ifndef _HSK_CONSTANTS_H
 #define _HSK_CONSTANTS_H
 
+#include "config.h"
 #include "genesis.h"
+#include "checkpoints.h"
 
 #define HSK_MAIN 0
 #define HSK_TESTNET 1
@@ -13,7 +15,7 @@
 #endif
 
 #define HSK_MAX_MESSAGE (8 * 1000 * 1000)
-#define HSK_USER_AGENT "/hnsd:1.0.0/"
+#define HSK_USER_AGENT "/"PACKAGE_NAME":"PACKAGE_VERSION"/"
 #define HSK_PROTO_VERSION 1
 #define HSK_SERVICES 0
 #define HSK_MAX_DATA_SIZE 668
@@ -78,10 +80,10 @@ static const uint8_t HSK_CHAINWORK[32] = {
 #define HSK_NO_RETARGETTING false
 #define HSK_GENESIS HSK_GENESIS_MAIN
 
-#define HSK_USE_CHECKPOINTS true
-#define HSK_LAST_CHECKPOINT 1008          // Used for maybe_sync, no block hash
+#define HSK_CHECKPOINT HSK_CHECKPOINT_MAIN
+#define HSK_STORE_CHECKPOINT_WINDOW 2000
+
 #define HSK_MAX_TIP_AGE (24 * 60 * 60)
-#define HSK_LAUNCH_DATE 0xffffffff        // Used for maybe_sync, not useful
 
 #elif HSK_NETWORK == HSK_TESTNET
 
@@ -133,10 +135,10 @@ static const uint8_t HSK_CHAINWORK[32] = {
 #define HSK_NO_RETARGETTING false
 #define HSK_GENESIS HSK_GENESIS_TESTNET
 
-#define HSK_USE_CHECKPOINTS false
-#define HSK_LAST_CHECKPOINT 0
+#define HSK_CHECKPOINT NULL
+#define HSK_STORE_CHECKPOINT_WINDOW 2000
+
 #define HSK_MAX_TIP_AGE (2 * 7 * 24 * 60 * 60)
-#define HSK_LAUNCH_DATE 0xffffffff
 
 #elif HSK_NETWORK == HSK_REGTEST
 
@@ -177,10 +179,10 @@ static const uint8_t HSK_CHAINWORK[32] = {
 #define HSK_NO_RETARGETTING true
 #define HSK_GENESIS HSK_GENESIS_REGTEST
 
-#define HSK_USE_CHECKPOINTS false
-#define HSK_LAST_CHECKPOINT 0
+#define HSK_CHECKPOINT NULL
+#define HSK_STORE_CHECKPOINT_WINDOW 200
+
 #define HSK_MAX_TIP_AGE (2 * 7 * 24 * 60 * 60)
-#define HSK_LAUNCH_DATE 0xffffffff
 
 #elif HSK_NETWORK == HSK_SIMNET
 
@@ -221,10 +223,10 @@ static const uint8_t HSK_CHAINWORK[32] = {
 #define HSK_NO_RETARGETTING false
 #define HSK_GENESIS HSK_GENESIS_SIMNET
 
-#define HSK_USE_CHECKPOINTS false
-#define HSK_LAST_CHECKPOINT 0
+#define HSK_CHECKPOINT NULL
+#define HSK_STORE_CHECKPOINT_WINDOW 200
+
 #define HSK_MAX_TIP_AGE (2 * 7 * 24 * 60 * 60)
-#define HSK_LAUNCH_DATE 0xffffffff
 
 #else
 

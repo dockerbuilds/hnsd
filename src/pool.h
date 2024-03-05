@@ -27,6 +27,7 @@
 #define HSK_STATE_READING 4
 #define HSK_STATE_HANDSHAKE 5
 #define HSK_STATE_DISCONNECTING 6
+#define HSK_MAX_AGENT 255
 
 /*
  * Types
@@ -59,6 +60,7 @@ typedef struct hsk_peer_s {
   hsk_brontide_t *brontide;
   uint64_t id;
   char host[HSK_MAX_HOST];
+  char agent[HSK_MAX_AGENT];
   hsk_addr_t addr;
   int state;
   uint8_t read_buffer[HSK_BUFFER_SIZE];
@@ -104,6 +106,7 @@ typedef struct hsk_pool_s {
   int pending_count;
   int64_t block_time;
   int64_t getheaders_time;
+  char *user_agent;
 } hsk_pool_t;
 
 /*
@@ -124,6 +127,9 @@ hsk_pool_set_size(hsk_pool_t *pool, int max_size);
 
 bool
 hsk_pool_set_seeds(hsk_pool_t *pool, const char *seeds);
+
+bool
+hsk_pool_set_agent(hsk_pool_t *pool, const char *user_agent);
 
 hsk_pool_t *
 hsk_pool_alloc(const uv_loop_t *loop);

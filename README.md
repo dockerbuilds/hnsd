@@ -89,6 +89,8 @@ $ brew install git automake autoconf libtool unbound
 You're a Linux user so you probably already know what to do. Make sure you have
 git, autotools, libtool, and unbound installed via whatever package manager
 your OS uses.
+You can install these dependencies on any Ubuntu/Debian style linux using
+`sudo apt install -y autotools-dev libtool libunbound-dev`
 
 ### Windows
 
@@ -304,6 +306,16 @@ and some of them are reqired to be installed manually.
 $ hnsd [options]
 ```
 
+**Reccomended usage:**
+
+```sh
+mkdir ~/.hnsd
+hnsd -t -x ~/.hnsd
+```
+
+This will start hnsd sync from the hard-coded checkpoint and continue to save
+its own checkpoints to disk to ensure rapid chain sync on future boots.
+
 ### Options
 
 ```
@@ -336,11 +348,49 @@ $ hnsd [options]
 -l, --log-file <filename>
   Redirect output to a log file.
 
+-a, --user-agent <string>
+  Add supplemental user agent string in p2p version message.
+
+-t, --checkpoint
+  Start chain sync from checkpoint.
+
+-x, --prefix <directory name>
+  Write/read state to/from disk in given directory.
+  
 -d, --daemon
   Fork and background the process.
 
 -h, --help
   Help message.
+```
+
+## Testing
+
+### Unit tests
+
+The `make` command will output two binaries into the root directory: `hnsd`
+and `test_hnsd`, which is compiled from unit tests in the `test/` directory.
+Run the tests with `./test_hnsd`.
+
+### Integration tests
+
+The `integration/` directory contains a nodejs package that installs hsd and
+runs a bmocha test suite. `hnsd` is run using `child_process.spawn()` and tested
+by making DNS queries to its open ports.
+
+`hnsd` MUST be built in regtest mode: `./configure --with-network=regtest`
+
+Build and run the integration tests (requires nodejs >= v16):
+
+```
+make e2e
+```
+
+or:
+
+```
+npm --prefix ./integration install
+npm --prefix ./integration run test
 ```
 
 ## License

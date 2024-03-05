@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign
-CFLAGS = -Wall -Wno-unused-function -std=gnu11 -O2
-LDFLAGS =
+CFLAGS = -Wall -Wno-unused-function -std=gnu11 -O2 $(SANITIZER_FLAGS)
+LDFLAGS = $(SANITIZER_FLAGS)
 
 SUBDIRS = uv
 
@@ -23,7 +23,7 @@ libhsk_la_LIBADD = $(top_builddir)/uv/libuv.la   \
                    $(LIB_WINBCRYPT)
 
 libhsk_la_CFLAGS = -DHSK_BUILD @CFLAGS@
-libhsk_la_LDFLAGS = -no-undefined -version-info 1:0:0
+libhsk_la_LDFLAGS = -no-undefined -version-info $(LINKER_VERSION)
 libhsk_la_SOURCES = src/addr.c                   \
                     src/addrmgr.c                \
                     src/aead.c                   \
@@ -40,6 +40,7 @@ libhsk_la_SOURCES = src/addr.c                   \
                     src/error.c                  \
                     src/hash.c                   \
                     src/header.c                 \
+                    src/hesiod.c                 \
                     src/map.c                    \
                     src/msg.c                    \
                     src/poly1305/poly1305.c      \
@@ -52,6 +53,7 @@ libhsk_la_SOURCES = src/addr.c                   \
                     src/sha3.c                   \
                     src/sig0.c                   \
                     src/siphash.c                \
+                    src/store.c                  \
                     src/timedata.c               \
                     src/utils.c                  \
                     src/secp256k1/secp256k1.c
@@ -75,5 +77,23 @@ hnsd_LDFLAGS = -static
 hnsd_CFLAGS = -DHSK_BUILD $(INC_UNBOUND) $(AM_CFLAGS)
 hnsd_CPPFLAGS = $(AM_CPPFLAGS)
 
+noinst_PROGRAMS = test_hnsd
+
+test_hnsd_SOURCES = test/hnsd-test.c     \
+                    test/base32-test.c   \
+                    test/dns-test.c      \
+                    test/resource-test.c
+
+test_hnsd_LDFLAGS = -static
+test_hnsd_CPPFLAGS = $(AM_CPPFLAGS)
+
+test_hnsd_LDADD = $(LIB_UNBOUND)             \
+                  $(top_builddir)/libhsk.la
+
 # pkgconfigdir = $(libdir)/pkgconfig
 # pkgconfig_DATA = @PACKAGE_NAME@.pc
+
+.PHONY: e2e
+e2e:
+	npm --prefix ./integration/ install
+	npm --prefix ./integration/ run test
